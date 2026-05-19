@@ -1,122 +1,126 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect, useCallback } from 'react';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+const BUTTONS = [
+  ['C', '⌫', '%', '÷'],
+  ['7', '8', '9', '×'],
+  ['4', '5', '6', '−'],
+  ['1', '2', '3', '+'],
+  ['0', '.', '='],
+];
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+const OPERATORS = new Set(['+', '−', '×', '÷', '%']);
 
-      <div className="ticks"></div>
+function calculate(expr) {
+  const sanitized = expr
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/−/g, '-');
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  try {
+    const result = Function('"use strict"; return (' + sanitized + ')')();
+    if (!isFinite(result)) return 'Error';
+    const rounded = Math.round(result * 1e10) / 1e10;
+    return String(rounded);
+  } catch {
+    return 'Error';
+  }
 }
 
-export default App
+export default function App() {
+  const [display, setDisplay] = useState('0');
+  const [evaluated, setEvaluated] = useState(false);
+
+  const handleButton = useCallback((value) => {
+    setDisplay((prev) => {
+      if (prev === 'Error') prev = '0';
+
+      if (value === 'C') return '0';
+
+      if (value === '⌫') {
+        return prev.length <= 1 || (prev.length === 2 && prev.startsWith('-'))
+          ? '0'
+          : prev.slice(0, -1);
+      }
+
+      if (value === '=') {
+        const result = calculate(prev);
+        setEvaluated(true);
+        return result;
+      }
+
+      const lastChar = prev.slice(-1);
+      const isOperator = OPERATORS.has(value);
+
+      if (isOperator) {
+        if (OPERATORS.has(lastChar)) {
+          return prev.slice(0, -1) + value;
+        }
+        if (prev === '0' && value !== '%') return prev;
+        setEvaluated(false);
+        return prev + value;
+      }
+
+      if (value === '.') {
+        const segments = prev.split(/[+\−×÷%]/);
+        const lastSegment = segments[segments.length - 1];
+        if (lastSegment.includes('.')) return prev;
+        if (lastSegment === '') return prev + '0.';
+      }
+
+      if (evaluated) {
+        setEvaluated(false);
+        return value;
+      }
+
+      if (prev === '0') return value;
+
+      return prev + value;
+    });
+  }, [evaluated]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const keyMap = {
+        '0': '0', '1': '1', '2': '2', '3': '3', '4': '4',
+        '5': '5', '6': '6', '7': '7', '8': '8', '9': '9',
+        '+': '+', '-': '−', '*': '×', '/': '÷', '%': '%',
+        '.': '.', ',': '.',
+        'Enter': '=', '=': '=',
+        'Escape': 'C', 'c': 'C',
+        'Backspace': '⌫',
+      };
+
+      const mapped = keyMap[e.key];
+      if (mapped) {
+        e.preventDefault();
+        handleButton(mapped);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleButton]);
+
+  return (
+    <div className="calculator">
+      <div className="display">{display}</div>
+      <div className="buttons">
+        {BUTTONS.flat().map((btn) => (
+          <button
+            key={btn}
+            className={'btn' +
+              (btn === '=' ? ' btn-equals' : '') +
+              (btn === 'C' ? ' btn-clear' : '') +
+              (OPERATORS.has(btn) ? ' btn-operator' : '') +
+              (btn === '0' ? ' btn-zero' : '')
+            }
+            onClick={() => handleButton(btn)}
+          >
+            {btn}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
